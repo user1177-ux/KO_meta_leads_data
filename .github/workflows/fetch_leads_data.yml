@@ -1,9 +1,7 @@
 name: Fetch Leads Data and Upload to Google Sheets
 
 on:
-  # Запуск вручную через интерфейс GitHub Actions
   workflow_dispatch:
-  # Периодический запуск по расписанию (каждый день в 8:00 UTC)
   schedule:
     - cron: '0 8 * * *'
 
@@ -26,7 +24,7 @@ jobs:
         pip install requests gspread oauth2client
 
     - name: Run lead data fetch script
-      run: python your_script.py  # Замените на имя вашего скрипта
+      run: python fetch_leads_data.py  # Имя вашего скрипта
       env:
         ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         AD_ACCOUNT_ID: ${{ secrets.AD_ACCOUNT_ID }}
