@@ -1,8 +1,18 @@
 import requests
-import csv
 import os
 from datetime import datetime, timedelta
-import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+# Настройка авторизации для Google Sheets
+# Замените 'path_to_your_credentials.json' на путь к вашему JSON-файлу с ключом
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name('path_to_your_credentials.json', scope)
+client = gspread.authorize(creds)
+
+# Откройте Google Таблицу по названию
+# Замените "Название вашей таблицы" на название вашей Google Таблицы
+sheet = client.open("Название вашей таблицы").sheet1
 
 def fetch_leads_data():
     access_token = os.getenv('ACCESS_TOKEN')
@@ -51,9 +61,6 @@ def fetch_leads_data():
         leads_response = requests.get(lead_url, params=lead_params)
         leads_data = leads_response.json()
 
-        # Вставляем отладочный вывод для проверки данных
-        print(leads_data)  # Выводит полный ответ JSON
-
         if 'error' in leads_data:
             print(f"Ошибка в ответе API при запросе лидов: {leads_data['error']}")
             continue
@@ -62,46 +69,25 @@ def fetch_leads_data():
             print(f"Ответ API не содержит ключ 'data' для объявления {ad_name}")
             continue
 
-        print(f"Объявление: {ad_name}, Количество лидов: {len(leads_data['data'])}")
-
         for lead in leads_data['data']:
             # Проверка, попадает ли лид в нужный диапазон дат
             lead_date = lead['created_time'][:10]
             if start_date <= lead_date <= end_date_str:
-                all_leads.append({
-                    'ID': lead['id'],
-                    'Время создания': lead['created_time'],
-                    'ID рекламы': lead['ad_id'],
-                    'Название рекламы': lead['ad_name'],
-                    'ID кампании': lead['campaign_id'],
-                    'Название кампании': lead['campaign_name'],
-                    'Название формы': lead.get('form_name', 'Unknown'),
-                    'Платформа': lead.get('platform', 'Unknown'),
-                    'Полное имя': lead.get('full_name', 'No name available'),
-                    'Номер телефона': lead.get('phone_number', 'No phone available')
-                })
+                # Добавляем данные лида в Google Таблицу
+                sheet.append_row([
+                    lead['id'], 
+                    lead['created_time'], 
+                    lead['ad_id'], 
+                    lead['ad_name'], 
+                    lead['campaign_id'], 
+                    lead['campaign_name'], 
+                    lead.get('form_name', 'Unknown'), 
+                    lead.get('platform', 'Unknown'), 
+                    lead.get('full_name', 'No name available'), 
+                    lead.get('phone_number', 'No phone available')
+                ])
 
-    file_path = 'facebook_ads_leads_data.csv'  # Имя итогового файла
-
-    if all_leads:
-        print(f"Запись {len(all_leads)} записей в файл")
-        # Используем pandas для записи в CSV и отображения таблицы
-        df = pd.DataFrame(all_leads)
-        df.to_csv(file_path, index=False)
-
-        # Отобразим итоговые данные в виде таблицы
-        print("\nИтоговые данные в виде таблицы:\n")
-        print(df)
-    else:
-        print("Нет данных для экспорта")
-
-    # Добавляем метку времени в конец файла, чтобы GitHub видел изменения
-    with open(file_path, 'a') as f:
-        updated_time = datetime.now().isoformat()
-        f.write(f"\n# Last updated: {updated_time}\n")
-        print(f"Метка времени обновлена: {updated_time}")
-
-    print("Данные успешно экспортированы в", file_path)
+    print("Данные успешно экспортированы в Google Таблицу")
 
 if __name__ == "__main__":
     fetch_leads_data()
