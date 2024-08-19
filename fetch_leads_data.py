@@ -1,18 +1,16 @@
-import requests
 import os
+import json
 from datetime import datetime, timedelta
+from google.oauth2 import service_account
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
-# Настройка авторизации для Google Sheets
-# Замените 'path_to_your_credentials.json' на путь к вашему JSON-файлу с ключом
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name('path_to_your_credentials.json', scope)
+# Настройка авторизации для Google Sheets через секрет GOOGLE_CREDENTIALS
+credentials_info = json.loads(os.getenv('GOOGLE_CREDENTIALS'))
+creds = service_account.Credentials.from_service_account_info(credentials_info)
 client = gspread.authorize(creds)
 
-# Откройте Google Таблицу по названию
-# Замените "Название вашей таблицы" на название вашей Google Таблицы
-sheet = client.open("Название вашей таблицы").sheet1
+# Открываем Google Таблицу по названию
+sheet = client.open("KO_Лиды").sheet1
 
 def fetch_leads_data():
     access_token = os.getenv('ACCESS_TOKEN')
