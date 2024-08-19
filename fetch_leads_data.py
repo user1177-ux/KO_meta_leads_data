@@ -1,18 +1,27 @@
 import os
 import json
-from datetime import datetime, timedelta
-from google.oauth2 import service_account
 import gspread
-
-# Настройка авторизации для Google Sheets через секрет GOOGLE_CREDENTIALS
-credentials_info = json.loads(os.getenv('GOOGLE_CREDENTIALS'))
-creds = service_account.Credentials.from_service_account_info(credentials_info)
-client = gspread.authorize(creds)
-
-# Открываем Google Таблицу по названию
-sheet = client.open("KO_Лиды").sheet1
+import requests
+from google.oauth2.service_account import Credentials
+from datetime import datetime, timedelta
+import pandas as pd
 
 def fetch_leads_data():
+    # SCOPES для работы с Google Sheets API
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+    # Получаем учетные данные из переменной среды
+    credentials = Credentials.from_service_account_info(
+        json.loads(os.environ['GOOGLE_CREDENTIALS']),
+        scopes=SCOPES
+    )
+
+    # Авторизация в Google Sheets API
+    client = gspread.authorize(credentials)
+
+    # Открываем Google Таблицу
+    sheet = client.open("Название_таблицы").sheet1
+
     access_token = os.getenv('ACCESS_TOKEN')
     ad_account_id = os.getenv('AD_ACCOUNT_ID')
 
@@ -59,6 +68,8 @@ def fetch_leads_data():
         leads_response = requests.get(lead_url, params=lead_params)
         leads_data = leads_response.json()
 
+        print(leads_response.json())  # Выводит полный ответ JSON
+
         if 'error' in leads_data:
             print(f"Ошибка в ответе API при запросе лидов: {leads_data['error']}")
             continue
@@ -67,23 +78,41 @@ def fetch_leads_data():
             print(f"Ответ API не содержит ключ 'data' для объявления {ad_name}")
             continue
 
+        print(f"Объявление: {ad_name}, Количество лидов: {len(leads_data['data'])}")
+
         for lead in leads_data['data']:
             # Проверка, попадает ли лид в нужный диапазон дат
             lead_date = lead['created_time'][:10]
             if start_date <= lead_date <= end_date_str:
-                # Добавляем данные лида в Google Таблицу
-                sheet.append_row([
-                    lead['id'], 
-                    lead['created_time'], 
-                    lead['ad_id'], 
-                    lead['ad_name'], 
-                    lead['campaign_id'], 
-                    lead['campaign_name'], 
-                    lead.get('form_name', 'Unknown'), 
-                    lead.get('platform', 'Unknown'), 
-                    lead.get('full_name', 'No name available'), 
-                    lead.get('phone_number', 'No phone available')
-                ])
+                all_leads.append({
+                    'ID': lead['id'],
+                    'Время создания': lead['created_time'],
+                    'ID рекламы': lead['ad_id'],
+                    'Название рекламы': lead['ad_name'],
+                    'ID кампании': lead['campaign_id'],
+                    'Название кампании': lead['campaign_name'],
+                    'Название формы': lead.get('form_name', 'Unknown'),
+                    'Платформа': lead.get('platform', 'Unknown'),
+                    'Полное имя': lead.get('full_name', 'No name available'),
+                    'Номер телефона': lead.get('phone_number', 'No phone available')
+                })
+
+    if all_leads:
+        print(f"Запись {len(all_leads)} записей в Google Таблицу")
+        # Преобразуем данные в DataFrame для записи
+        df = pd.DataFrame(all_leads)
+
+        # Очистим Google Таблицу перед записью
+        sheet.clear()
+
+        # Запишем данные в Google Таблицу
+        sheet.update([df.columns.values.tolist()] + df.values.tolist())
+
+        # Отобразим итоговые данные в виде таблицы
+        print("\nИтоговые данные в виде таблицы:\n")
+        print(df)
+    else:
+        print("Нет данных для экспорта")
 
     print("Данные успешно экспортированы в Google Таблицу")
 
